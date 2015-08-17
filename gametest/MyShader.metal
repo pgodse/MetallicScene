@@ -8,27 +8,14 @@
 
 #include <metal_stdlib>
 #include <simd/simd.h>
-
+#include "SharedStructures.h"
 using namespace metal;
-
-typedef struct {
-    float3 position;
-} Triangle;
-
-typedef struct {
-    float4 color;
-}PointColor;
 
 typedef struct {
     float4 position [[position]];
     float4 color;
+    float3 ambientColor;
 } TriangleOutput;
-
-typedef struct __attribute__((__aligned__(256)))
-{
-    matrix_float4x4 modelview_projection_matrix;
-    matrix_float4x4 normal_matrix;
-} uniforms_t;
 
 
 vertex TriangleOutput VertexColor(const device Triangle *Vertices [[buffer(0)]], const uint index [[vertex_id]],
@@ -39,10 +26,13 @@ vertex TriangleOutput VertexColor(const device Triangle *Vertices [[buffer(0)]],
     out.position = uniform.modelview_projection_matrix * float4(Vertices[index].position, 1.0);
 //    out.color = color[index].color;
     out.color = float4(Vertices[index].position.x, Vertices[index].position.y, Vertices[index].position.z, 1.0);
+    out.ambientColor = uniform.ambientColor;
     return out;
 }
 
 fragment float4 FragmentColor(TriangleOutput in [[stage_in]]) {
-    return in.color;
+    float4 fragColor = in.color;
+    fragColor.xyz += in.ambientColor;
+    return fragColor;
 //    return float4(1.0, 0.0, 0.0, 1.0);
 }

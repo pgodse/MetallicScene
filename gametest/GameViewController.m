@@ -12,6 +12,8 @@
 #import <MetalKit/MetalKit.h>
 #import "SharedStructures.h"
 
+#import "MetalMesh.h"
+
 // The max number of command buffers in flight
 static const NSUInteger kMaxInflightBuffers = 3;
 
@@ -45,10 +47,12 @@ static const size_t kMaxBytesPerFrame = 1024*1024;
     MTKMesh *_boxMesh;
     
     MTLRenderPipelineDescriptor *renderPipelineDescriptor;
-    id <MTLBuffer> object;
-    id <MTLBuffer> _colorBuffer;
+//    id <MTLBuffer> object;
+//    id <MTLBuffer> _colorBuffer;
     
-    NSUInteger _vertexCount;
+//    NSUInteger _vertexCount;
+    
+    MetalMesh *_sampleMesh;
 }
 
 - (void)viewDidLoad
@@ -60,20 +64,6 @@ static const size_t kMaxBytesPerFrame = 1024*1024;
     
     [self _setupMetal];
     [self _setupView];
-//    _device = MTLCreateSystemDefaultDevice();
-//    _commandQueue = [_device newCommandQueue];
-    
-//    metalLayer = [CAMetalLayer layer];
-//    [metalLayer setDevice:mtlDevice];
-//    [metalLayer setPixelFormat:MTLPixelFormatBGRA8Unorm];
-//    
-//    metalLayer.framebufferOnly = YES;
-//    [metalLayer setFrame:self.view.layer.frame];
-//    [self.view.layer addSublayer:metalLayer];
-    
-//    [self.view setOpaque:YES];
-//    [self.view setBackgroundColor:nil];
-//    [self.view setContentScaleFactor:[UIScreen mainScreen].scale];
     
     // Create a reusable pipeline state
     renderPipelineDescriptor = [MTLRenderPipelineDescriptor new];
@@ -83,6 +73,7 @@ static const size_t kMaxBytesPerFrame = 1024*1024;
     renderPipelineDescriptor.stencilAttachmentPixelFormat = _view.depthStencilPixelFormat;
     renderPipelineDescriptor.sampleCount = _view.sampleCount;
     _view.clearColor = MTLClearColorMake(0.5, 0.3, 0.1, 1.0);
+    
     // shaders
     id <MTLLibrary> lib = [_device newDefaultLibrary];
     renderPipelineDescriptor.vertexFunction = [lib newFunctionWithName:@"VertexColor"];
@@ -90,24 +81,10 @@ static const size_t kMaxBytesPerFrame = 1024*1024;
     
     _pipelineState = [_device newRenderPipelineStateWithDescriptor:renderPipelineDescriptor error: nil];
     
-    Triangle triangle[3] = {
-        (vector_float3){ -.5f, 1.0f, 0.0f },
-        (vector_float3){ 0.5f, 2.0f, 0.0f},
-        (vector_float3){ 0.0f, 3.5f, 0.0f }
-    };
-    //triangle[0].position = vector_float(-0.5, 0.0);
+    _sampleMesh = [[MetalMesh alloc] initMeshWithDevice:_device];
+    [_sampleMesh createBoxGeometry:1.0];
     
-    [self buildBoxGeometry:1.0];
-//    object = [_device newBufferWithBytes:&triangle length:sizeof(Triangle[3]) options:MTLResourceOptionCPUCacheModeDefault];
-//    [object setLabel:@"MyTriangle"];
-    
-    //Build color buffer
-    PointColor colors[3] = {
-        (vector_float4) {0.6, 0.4, 0.4, 1.0},
-        (vector_float4) {0.6, 0.4, 0.5, 1.0},
-        (vector_float4) {0.6, 0.7, 0.4, 1.0}
-    };
-    _colorBuffer = [_device newBufferWithBytes:&colors length:sizeof(PointColor[3]) options:MTLResourceOptionCPUCacheModeDefault];
+    _uniform_buffer.ambientColor = (vector_float3){0.2, 0.2, 0.2};
     
     _dynamicConstantBuffer = [_device newBufferWithBytes:&_uniform_buffer length:sizeof(uniforms_t) options:MTLResourceOptionCPUCacheModeDefault];
     
@@ -116,17 +93,13 @@ static const size_t kMaxBytesPerFrame = 1024*1024;
     depthStateDesc.depthWriteEnabled = YES;
     _depthState = [_device newDepthStencilStateWithDescriptor:depthStateDesc];
     
-//    [self _setupMetal];
-//    [self _setupView];
-//    [self _loadAssets];
-//    [self _reshape];
 }
 
 -(void)renderSceneCustom
 {
     dispatch_semaphore_wait(_inflight_semaphore, DISPATCH_TIME_FOREVER);
     
-//    [self _update];
+    [self _update];
     
     // Create a new command buffer for each renderpass to the current drawable
     id <MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
@@ -139,6 +112,7 @@ static const size_t kMaxBytesPerFrame = 1024*1024;
         return;
     
     // Create a render command encoder so we can render into something
+//    id<MTLParallelRenderCommandEncoder> parallel = [commandBuffer parallelRenderCommandEncoderWithDescriptor:renderPassDescriptor];
     id <MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
     renderEncoder.label = @"MyRenderEncoder";
     [renderEncoder setDepthStencilState:_depthState];
@@ -146,19 +120,15 @@ static const size_t kMaxBytesPerFrame = 1024*1024;
     // Set context state
     [renderEncoder pushDebugGroup:@"DrawCube"];
     [renderEncoder setRenderPipelineState:_pipelineState];
-    [renderEncoder setVertexBuffer:object offset:0 atIndex:0];
     [renderEncoder setVertexBuffer:_dynamicConstantBuffer offset:0 atIndex:1];
-    [renderEncoder setVertexBuffer:_colorBuffer offset:0 atIndex:2];
-    
-    // Tell the render context we want to draw our primitives
-    [renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:_vertexCount];
-    
-    [renderEncoder setViewport:(MTLViewport){0, 0, _view.frame.size.width, _view.frame.size.height}];
+    [_sampleMesh drawObjectWithCommandEncoder:renderEncoder];
     [renderEncoder popDebugGroup];
     
     // We're done encoding commands
     [renderEncoder endEncoding];
     
+//    [renderEncoder2 endEncoding];
+//    [parallel endEncoding];
     // Call the view's completion handler which is required by the view since it will signal its semaphore and set up the next buffer
     __block dispatch_semaphore_t block_sema = _inflight_semaphore;
     [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
@@ -198,134 +168,12 @@ static const size_t kMaxBytesPerFrame = 1024*1024;
     _defaultLibrary = [_device newDefaultLibrary];
 }
 
-- (void)buildBoxGeometry:(float)length {
-    _vertexCount = 36;
-    vector_float3 a = {-length, -length, length};
-    vector_float3 b = {length, -length, length};
-    vector_float3 c = {length, length, length};
-    vector_float3 d = {-length, length, length};
-    
-    vector_float3 e = {-length, -length, -length};
-    vector_float3 f = {length, -length, -length};
-    vector_float3 g = {length, length, -length};
-    vector_float3 h = {-length, length, -length};
-    
-    Triangle boxes[36] = {
-        e, a, f,    f, a, b,
-        h, d, c,    g, h, c,
-        c, a, b,    c, d, a,
-        g, f, h,    h, f, e,
-        h, e, d,    d, e, a,
-        g, c, b,    g, b, f
-    };
-    
-    object = [_device newBufferWithBytes:&boxes length:sizeof(Triangle[_vertexCount]) options:MTLResourceOptionCPUCacheModeDefault];
-    [object setLabel:@"MyTriangle"];
-    
-}
 
 - (void)_loadAssets44
 {
-    // Generate meshes
-//    MDLMesh *mdl = [MDLMesh newBoxWithDimensions:(vector_float3){2,2,2} segments:(vector_uint3){1,1,1}
-//                                    geometryType:MDLGeometryTypeTriangles inwardNormals:NO
-//                                       allocator:[[MTKMeshBufferAllocator alloc] initWithDevice: _device]];
-//    id tt = _device;
     id tt = [[MTKMeshBufferAllocator alloc] initWithDevice:_device];
-//    MDLMesh *mdl;
-//    mdl = [MDLMesh newPlaneWithDimensions:(vector_float2){2,2} segments:(vector_uint2){1,0} geometryType:MDLGeometryKindTriangles allocator:[[MTKMeshBufferAllocator alloc] initWithDevice:_device]];
-    
-//    _boxMesh = [[MTKMesh alloc] initWithMesh:mdl device:_device error:nil];
-//
-//    // Allocate one region of memory for the uniform buffer
-//    _dynamicConstantBuffer = [_device newBufferWithLength:kMaxBytesPerFrame options:0];
-//    _dynamicConstantBuffer.label = @"UniformBuffer";
-    
-//    // Load the fragment program into the library
-//    id <MTLFunction> fragmentProgram = [_defaultLibrary newFunctionWithName:@"lighting_fragment"];
-//    
-//    // Load the vertex program into the library
-//    id <MTLFunction> vertexProgram = [_defaultLibrary newFunctionWithName:@"lighting_vertex"];
-//    
-//    // Create a vertex descriptor from the MTKMesh
-//    MTLVertexDescriptor *vertexDescriptor = MTKMetalVertexDescriptorFromModelIO(_boxMesh.vertexDescriptor);
-//    vertexDescriptor.layouts[0].stepRate = 1;
-//    vertexDescriptor.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
-    
-//    // Create a reusable pipeline state
-//    MTLRenderPipelineDescriptor *pipelineStateDescriptor = [[MTLRenderPipelineDescriptor alloc] init];
-//    pipelineStateDescriptor.label = @"MyPipeline";
-//    pipelineStateDescriptor.sampleCount = _view.sampleCount;
-//    pipelineStateDescriptor.vertexFunction = vertexProgram;
-//    pipelineStateDescriptor.fragmentFunction = fragmentProgram;
-//    pipelineStateDescriptor.vertexDescriptor = vertexDescriptor;
-//    pipelineStateDescriptor.colorAttachments[0].pixelFormat = _view.colorPixelFormat;
-//    pipelineStateDescriptor.depthAttachmentPixelFormat = _view.depthStencilPixelFormat;
-//    pipelineStateDescriptor.stencilAttachmentPixelFormat = _view.depthStencilPixelFormat;
-//    
-//    NSError *error = NULL;
-//    _pipelineState = [_device newRenderPipelineStateWithDescriptor:pipelineStateDescriptor error:&error];
-//    if (!_pipelineState) {
-//        NSLog(@"Failed to created pipeline state, error %@", error);
-//    }
-    
-//    MTLDepthStencilDescriptor *depthStateDesc = [[MTLDepthStencilDescriptor alloc] init];
-//    depthStateDesc.depthCompareFunction = MTLCompareFunctionLess;
-//    depthStateDesc.depthWriteEnabled = YES;
-//    _depthState = [_device newDepthStencilStateWithDescriptor:depthStateDesc];
 }
 
-//- (void)_render
-//{
-//    dispatch_semaphore_wait(_inflight_semaphore, DISPATCH_TIME_FOREVER);
-//    
-//    [self _update];
-//
-//    // Create a new command buffer for each renderpass to the current drawable
-//    id <MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
-//    commandBuffer.label = @"MyCommand";
-//    
-//    // Obtain a renderPassDescriptor generated from the view's drawable textures
-//    MTLRenderPassDescriptor* renderPassDescriptor = _view.currentRenderPassDescriptor;
-//
-//    if(renderPassDescriptor == nil)
-//        return;
-//
-//    // Create a render command encoder so we can render into something
-//    id <MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
-//    renderEncoder.label = @"MyRenderEncoder";
-//    [renderEncoder setDepthStencilState:_depthState];
-//    
-//    // Set context state
-//    [renderEncoder pushDebugGroup:@"DrawCube"];
-//    [renderEncoder setRenderPipelineState:_pipelineState];
-//    [renderEncoder setVertexBuffer:_boxMesh.vertexBuffers[0].buffer offset:_boxMesh.vertexBuffers[0].offset atIndex:0 ];
-//    [renderEncoder setVertexBuffer:_dynamicConstantBuffer offset:0 atIndex:1 ];
-//    
-//    MTKSubmesh* submesh = _boxMesh.submeshes[0];
-//    // Tell the render context we want to draw our primitives
-//    [renderEncoder drawIndexedPrimitives:submesh.primitiveType indexCount:submesh.indexCount indexType:submesh.indexType indexBuffer:submesh.indexBuffer.buffer indexBufferOffset:submesh.indexBuffer.offset];
-//
-//    [renderEncoder popDebugGroup];
-//    
-//    // We're done encoding commands
-//    [renderEncoder endEncoding];
-//    
-//    // Call the view's completion handler which is required by the view since it will signal its semaphore and set up the next buffer
-//    __block dispatch_semaphore_t block_sema = _inflight_semaphore;
-//    [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
-//        dispatch_semaphore_signal(block_sema);
-//    }];
-//    
-//    // The renderview assumes it can now increment the buffer index and that the previous index won't be touched until we cycle back around to the same index
-//    _constantDataBufferIndex = (_constantDataBufferIndex + 1) % kMaxInflightBuffers;
-//    
-//    // Schedule a present once the framebuffer is complete using the current drawable
-//    [commandBuffer presentDrawable:_view.currentDrawable];
-//    
-//    // Finalize rendering here & push the command buffer to the GPU
-//    [commandBuffer commit];
-//}
 
 - (void)_reshape
 {
@@ -349,8 +197,8 @@ static const size_t kMaxBytesPerFrame = 1024*1024;
     
     //Triangle *tr = &[object contents][0];
 //    tr->position.s = 3 * sin(_rotation);
-    PointColor *color = &[_colorBuffer contents][0];
-    color->colorRGB =  cos(_rotation);
+//    PointColor *color = &[_colorBuffer contents][0];
+//    color->colorRGB =  cos(_rotation);
     _rotation += 0.01f;
 }
 
@@ -365,7 +213,6 @@ static const size_t kMaxBytesPerFrame = 1024*1024;
 - (void)drawInMTKView:(nonnull MTKView *)view
 {
     @autoreleasepool {
-        [self _update];
         [self renderSceneCustom];
         //[self _render];
     }
@@ -410,7 +257,6 @@ static matrix_float4x4 matrix_from_rotation(float radians, float x, float y, flo
     float cos = cosf(radians);
     float cosp = 1.0f - cos;
     float sin = sinf(radians);
-    
     matrix_float4x4 m = {
         .columns[0] = {
             cos + cosp * v.x * v.x,

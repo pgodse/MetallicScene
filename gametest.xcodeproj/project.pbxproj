@@ -15,6 +15,7 @@
 		0DE566CA1B7FCE710033AB6A /* gametestTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 0DE566C91B7FCE710033AB6A /* gametestTests.m */; };
 		0DE566D51B7FCE710033AB6A /* gametestUITests.m in Sources */ = {isa = PBXBuildFile; fileRef = 0DE566D41B7FCE710033AB6A /* gametestUITests.m */; };
 		0DE566E51B7FD4A70033AB6A /* MyShader.metal in Sources */ = {isa = PBXBuildFile; fileRef = 0DE566E41B7FD4A70033AB6A /* MyShader.metal */; };
+		0DE566EA1B81532F0033AB6A /* MetalMesh.m in Sources */ = {isa = PBXBuildFile; fileRef = 0DE566E91B81532F0033AB6A /* MetalMesh.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,6 +54,8 @@
 		0DE566D41B7FCE710033AB6A /* gametestUITests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = gametestUITests.m; sourceTree = "<group>"; };
 		0DE566D61B7FCE710033AB6A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0DE566E41B7FD4A70033AB6A /* MyShader.metal */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.metal; path = MyShader.metal; sourceTree = "<group>"; };
+		0DE566E81B81532F0033AB6A /* MetalMesh.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MetalMesh.h; sourceTree = "<group>"; };
+		0DE566E91B81532F0033AB6A /* MetalMesh.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MetalMesh.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +108,8 @@
 			children = (
 				0DE566AF1B7FCE710033AB6A /* AppDelegate.h */,
 				0DE566B01B7FCE710033AB6A /* AppDelegate.m */,
+				0DE566E81B81532F0033AB6A /* MetalMesh.h */,
+				0DE566E91B81532F0033AB6A /* MetalMesh.m */,
 				0DE566B51B7FCE710033AB6A /* GameViewController.h */,
 				0DE566B61B7FCE710033AB6A /* GameViewController.m */,
 				0DE566B81B7FCE710033AB6A /* Shaders.metal */,
@@ -277,6 +282,7 @@
 				0DE566B41B7FCE710033AB6A /* main.m in Sources */,
 				0DE566B71B7FCE710033AB6A /* GameViewController.m in Sources */,
 				0DE566B11B7FCE710033AB6A /* AppDelegate.m in Sources */,
+				0DE566EA1B81532F0033AB6A /* MetalMesh.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
